@@ -53,6 +53,8 @@ public interface HostConnectionPool<CL> {
      */
     boolean closeConnection(Connection<CL> connection);
 
+    void discardIdleConnections();
+
     /**
      * Shut down the host so no more connections may be created when
      * borrowConnections is called and connections will be terminated when

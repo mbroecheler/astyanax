@@ -109,6 +109,11 @@ public class TestHostConnectionPool implements HostConnectionPool<TestClient> {
     }
 
     @Override
+    public void discardIdleConnections() {
+
+    }
+
+    @Override
     public int getOpenedConnectionCount() {
         return 0;
     }

@@ -539,7 +539,8 @@ public class SimpleHostConnectionPool<CL> implements HostConnectionPool<CL> {
      * Drain all idle connections and close them.  Connections that are currently borrowed
      * will not be closed here.
      */
-    private void discardIdleConnections() {
+    @Override
+    public void discardIdleConnections() {
         List<Connection<CL>> connections = Lists.newArrayList();
         availableConnections.drainTo(connections);
         activeCount.addAndGet(-connections.size());

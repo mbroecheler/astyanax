@@ -3,6 +3,7 @@ package com.netflix.astyanax;
 import java.util.Arrays;
 import java.util.List;
 
+import com.netflix.astyanax.connectionpool.impl.*;
 import org.apache.commons.lang.StringUtils;
 
 import com.google.common.base.Preconditions;
@@ -14,12 +15,6 @@ import com.netflix.astyanax.connectionpool.ConnectionPoolMonitor;
 import com.netflix.astyanax.connectionpool.Host;
 import com.netflix.astyanax.connectionpool.NodeDiscovery;
 import com.netflix.astyanax.connectionpool.NodeDiscoveryType;
-import com.netflix.astyanax.connectionpool.impl.CountingConnectionPoolMonitor;
-import com.netflix.astyanax.connectionpool.impl.NodeDiscoveryImpl;
-import com.netflix.astyanax.connectionpool.impl.BagOfConnectionsConnectionPoolImpl;
-import com.netflix.astyanax.connectionpool.impl.ConnectionPoolType;
-import com.netflix.astyanax.connectionpool.impl.RoundRobinConnectionPoolImpl;
-import com.netflix.astyanax.connectionpool.impl.TokenAwareConnectionPoolImpl;
 import com.netflix.astyanax.impl.FilteringHostSupplier;
 import com.netflix.astyanax.impl.RingDescribeHostSupplier;
 import com.netflix.astyanax.shallows.EmptyKeyspaceTracerFactory;
@@ -108,7 +103,7 @@ public class AstyanaxContext<Entity> {
             ConnectionPool<T> connectionPool = null;
             switch (asConfig.getConnectionPoolType()) {
             case TOKEN_AWARE:
-                connectionPool = new TokenAwareConnectionPoolImpl<T>(cpConfig, connectionFactory, monitor);
+                connectionPool = new TokenSmartConnectionPoolImpl<T>(cpConfig, connectionFactory, monitor);
                 break;
 
             case BAG:
