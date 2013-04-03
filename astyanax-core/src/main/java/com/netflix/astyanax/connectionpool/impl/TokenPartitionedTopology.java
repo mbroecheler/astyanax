@@ -186,7 +186,12 @@ public class TokenPartitionedTopology<CL> implements Topology<CL> {
 
     @Override
     public TokenHostConnectionPoolPartition<CL> getPartition(String token) {
-        return tokenToPartitionMap.get(new BigInteger(token));
+        return getPartition(new BigInteger(token));
+    }
+
+    @Override
+    public TokenHostConnectionPoolPartition<CL> getPartition(BigInteger token) {
+        return tokenToPartitionMap.get(token);
     }
     
     @Override

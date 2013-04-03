@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.netflix.astyanax.connectionpool.impl;
 
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.netflix.astyanax.connectionpool.*;
 import com.netflix.astyanax.connectionpool.exceptions.ConnectionException;
@@ -23,11 +24,13 @@ import org.cliffc.high_scale_lib.NonBlockingHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Connection pool that partitions connections by the hosts which own the token
@@ -70,21 +73,21 @@ public class TokenSmartConnectionPoolImpl<CL> extends AbstractHostPartitionConne
             }
             else {
                 //update counts
-                if (op.getRowKey()!=null) {
-                    String token = partitioner.getTokenForKey(op.getRowKey());
-                    Counter c = counts.get(token);
+                TokenHostConnectionPoolPartition<CL> partition = topology.getPartition(op.getRowKey());
+                if (partition.id()!=null) {
+                    Counter c = counts.get(partition.id());
                     if (c==null) {
-                        counts.putIfAbsent(token,new Counter());
-                        c = counts.get(token);
+                        counts.putIfAbsent(partition.id(),new Counter());
+                        c = counts.get(partition.id());
                     }
                     c.update();
                 }
 
                 //initialize if necessary
-                if (currentPools==null) {
+                if (currentPartition.get()==null) {
                     //initialize
                     synchronized (this) {
-                        if (currentPools==null) {
+                        if (currentPartition.get()==null) {
                             try {
                                 updatePools();
                             } catch (InterruptedException e) {
@@ -96,9 +99,11 @@ public class TokenSmartConnectionPoolImpl<CL> extends AbstractHostPartitionConne
                         }
                     }
                 }
-                Preconditions.checkNotNull(currentPools);
+                Preconditions.checkNotNull(currentPartition.get());
 
-                pools = currentPools;
+                partition = currentPartition.get();
+                pools = partition.getPools();
+                isSorted = partition.isSorted();
             }
 
             int index = roundRobinCounter.incrementAndGet();
@@ -137,62 +142,58 @@ public class TokenSmartConnectionPoolImpl<CL> extends AbstractHostPartitionConne
 
 
     private static final double DECAY_EXPONENT_MULTI = 0.0005;
-    private static final int BG_THREAD_WAIT_TIME = 100;
-    private static final int MAX_CLOSE_ATTEMPTS = 20;
-    private static final int DEFAULT_UPDATE_INTERVAL = 5000;
+    private static final int BG_THREAD_WAIT_TIME = 200;
+    private static final int MAX_CLOSE_ATTEMPTS = 5;
+    private static final int DEFAULT_UPDATE_INTERVAL = 4000+BG_THREAD_WAIT_TIME*MAX_CLOSE_ATTEMPTS;
     private static final Random random = new Random();
 
 
-    private volatile List<HostConnectionPool<CL>> currentPools=null;
-    private volatile String currentToken=null;
+    private final AtomicReference<TokenHostConnectionPoolPartition<CL>> currentPartition=new AtomicReference<TokenHostConnectionPoolPartition<CL>>();
 
     private Thread backgroundThread=null;
-    private NonBlockingHashMap<String,Counter> counts = new NonBlockingHashMap<String,Counter>();
+    private NonBlockingHashMap<BigInteger,Counter> counts = new NonBlockingHashMap<BigInteger,Counter>();
 
 
     private void updatePools() throws InterruptedException {
-        String bestToken = null;
+        BigInteger bestToken = null;
         double bestTokenValue = 0.0;
-        for (Map.Entry<String,Counter> entry : counts.entrySet()) {
+        for (Map.Entry<BigInteger,Counter> entry : counts.entrySet()) {
             if (bestToken==null || bestTokenValue<entry.getValue().currentValue()) {
                 bestToken=entry.getKey();
                 bestTokenValue=entry.getValue().currentValue();
             }
         }
+        TokenHostConnectionPoolPartition<CL> nextPartition, oldPartition = currentPartition.get();
         if (bestToken==null) {
-            List<String> allTokens = topology.getPartitionNames();
-            Preconditions.checkArgument(allTokens.size()>0);
-            bestToken = allTokens.get(random.nextInt(allTokens.size()));
+            nextPartition = topology.getAllPools();
+        } else {
+            nextPartition = topology.getPartition(bestToken);
         }
-        Preconditions.checkNotNull(bestToken);
-        if (!bestToken.equals(currentToken)) {
-            LOG.info("Choosing new pool for token: {}",bestToken);
-            List<HostConnectionPool<CL>> oldPools = currentPools;
-            TokenHostConnectionPoolPartition<CL> partition = topology.getPartition(bestToken);
-            currentPools = partition.getPools();
-            currentToken = bestToken;
+        Preconditions.checkNotNull(nextPartition);
+        LOG.info("Updating pool to token: {}",nextPartition.id());
+        currentPartition.set(nextPartition);
 
-            //Release connections from old pool
-            if (oldPools!=null) {
+        //Release connections from old pool
+        if (oldPartition!=null && !Objects.equal(nextPartition.id(),oldPartition.id()) ) {
+            int activeConnections; int attempts=0;
+            do {
                 try {
                     Thread.sleep(BG_THREAD_WAIT_TIME);
                 } catch (InterruptedException e) {
                     LOG.warn("Interrupted while waiting to close down old pool");
                     throw e;
                 }
-                int activeConnections; int attempts=0;
-                do {
-                    attempts++;
-                    activeConnections = 0;
-                    for (HostConnectionPool<CL> pool : oldPools) {
-                        pool.discardIdleConnections();
-                        activeConnections += pool.getActiveConnectionCount();
-                    }
-                    LOG.info("Active connections on attempt {}: {}. Sleeping if >0",attempts,activeConnections);
-                } while (activeConnections>0 && attempts<MAX_CLOSE_ATTEMPTS);
-                if (attempts>=MAX_CLOSE_ATTEMPTS) LOG.warn("Open connections after {} attempts: {}. Giving up.",attempts,activeConnections);
-            }
-        } //else we don't need to update
+                attempts++;
+                activeConnections = 0;
+                for (HostConnectionPool<CL> pool : oldPartition.pools) {
+                    pool.discardIdleConnections();
+                    activeConnections += pool.getActiveConnectionCount();
+                }
+                LOG.info("Active connections on attempt {}: {}. Sleeping if >0",attempts,activeConnections);
+            } while (activeConnections>0 && attempts<MAX_CLOSE_ATTEMPTS);
+            if (attempts>=MAX_CLOSE_ATTEMPTS) LOG.warn("Open connections after {} attempts: {}. Giving up.",attempts,activeConnections);
+        }
+
     }
 
     private class HostUpdater implements Runnable {

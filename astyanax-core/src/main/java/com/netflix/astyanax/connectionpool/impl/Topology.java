@@ -1,5 +1,6 @@
 package com.netflix.astyanax.connectionpool.impl;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.List;
@@ -91,4 +92,10 @@ public interface Topology<CL> {
      * @param token
      */
     TokenHostConnectionPoolPartition<CL> getPartition(String token);
+
+    /**
+     * Return the partition for a specific token
+     * @param token
+     */
+    TokenHostConnectionPoolPartition<CL> getPartition(BigInteger token);
 }

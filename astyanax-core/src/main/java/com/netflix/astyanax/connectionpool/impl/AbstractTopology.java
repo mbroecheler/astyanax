@@ -1,5 +1,6 @@
 package com.netflix.astyanax.connectionpool.impl;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.List;
@@ -98,6 +99,11 @@ public class AbstractTopology<CL> implements Topology<CL> {
 
     @Override
     public TokenHostConnectionPoolPartition<CL> getPartition(String token) {
+        return allPools;
+    }
+
+    @Override
+    public TokenHostConnectionPoolPartition<CL> getPartition(BigInteger token) {
         return allPools;
     }
 
