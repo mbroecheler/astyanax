@@ -165,6 +165,7 @@ public class TokenSmartConnectionPoolImpl<CL> extends AbstractHostPartitionConne
         }
         TokenHostConnectionPoolPartition<CL> nextPartition, oldPartition = currentPartition.get();
         if (bestToken==null) {
+            LOG.info("No best token, using getAllPools()");
             nextPartition = topology.getAllPools();
         } else {
             nextPartition = topology.getPartition(bestToken);
@@ -191,7 +192,7 @@ public class TokenSmartConnectionPoolImpl<CL> extends AbstractHostPartitionConne
                 }
                 LOG.info("Active connections on attempt {}: {}. Sleeping if >0",attempts,activeConnections);
             } while (activeConnections>0 && attempts<MAX_CLOSE_ATTEMPTS);
-            if (attempts>=MAX_CLOSE_ATTEMPTS) LOG.warn("Open connections after {} attempts: {}. Giving up.",attempts,activeConnections);
+            if (attempts>=MAX_CLOSE_ATTEMPTS) LOG.info("Open connections after {} attempts: {}. Giving up.",attempts,activeConnections);
         }
 
     }
@@ -217,7 +218,6 @@ public class TokenSmartConnectionPoolImpl<CL> extends AbstractHostPartitionConne
                 long sleepTime = updateInterval - (System.currentTimeMillis()-lastUpdateTime);
                 try {
                     Thread.sleep(Math.max(0,sleepTime));
-                    System.out.println("updating pools");
                     updatePools();
                     lastUpdateTime=System.currentTimeMillis();
                 } catch (InterruptedException e) {
