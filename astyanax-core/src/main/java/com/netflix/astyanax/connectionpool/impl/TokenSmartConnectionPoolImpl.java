@@ -140,6 +140,7 @@ public class TokenSmartConnectionPoolImpl<CL> extends AbstractHostPartitionConne
     private static final int BG_THREAD_WAIT_TIME = 100;
     private static final int MAX_CLOSE_ATTEMPTS = 20;
     private static final int DEFAULT_UPDATE_INTERVAL = 5000;
+    private static final Random random = new Random();
 
 
     private volatile List<HostConnectionPool<CL>> currentPools=null;
@@ -158,7 +159,11 @@ public class TokenSmartConnectionPoolImpl<CL> extends AbstractHostPartitionConne
                 bestTokenValue=entry.getValue().currentValue();
             }
         }
-        if (bestToken==null) bestToken = partitioner.getMinToken();
+        if (bestToken==null) {
+            List<String> allTokens = topology.getPartitionNames();
+            Preconditions.checkArgument(allTokens.size()>0);
+            bestToken = allTokens.get(random.nextInt(allTokens.size()));
+        }
         Preconditions.checkNotNull(bestToken);
         if (!bestToken.equals(currentToken)) {
             LOG.info("Choosing new pool for token: {}",bestToken);
