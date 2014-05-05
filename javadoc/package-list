@@ -1,0 +1,11 @@
+com.netflix.astyanax
+com.netflix.astyanax.cql
+com.netflix.astyanax.impl
+com.netflix.astyanax.mapping
+com.netflix.astyanax.model
+com.netflix.astyanax.partitioner
+com.netflix.astyanax.query
+com.netflix.astyanax.serializers
+com.netflix.astyanax.shallows
+com.netflix.astyanax.test
+com.netflix.astyanax.util
